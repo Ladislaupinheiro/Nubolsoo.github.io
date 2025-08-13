@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NUBOLSO — Gestor Financeiro</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg-dark:#071126; --bg-soft:#0b1220;
+    --card:#0f1725; --muted:#9aa6b2;
+    --accent:#2b8cff; --accent-2:#6fb0ff; --success:#4caf50; --danger:#e53935;
+    --glass: rgba(255,255,255,0.03);
+  }
+  html,body{height:100%;margin:0;font-family:"Segoe UI", Roboto, Arial; -webkit-font-smoothing:antialiased;}
+  body{background:linear-gradient(180deg,#071126,#071529); color:#e6eef8;}
+  .app{max-width:1080px;margin:18px auto;padding:16px;display:grid;gap:14px;}
+  header.brand{display:flex;align-items:center;gap:14px;padding:14px;border-radius:12px;background:linear-gradient(90deg,var(--accent),#3aa0ff);box-shadow:0 12px 30px rgba(2,6,23,0.6);animation:logoEnter .6s ease;}
+  @keyframes logoEnter{from{transform:translateY(-12px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+  .logo{width:56px;height:56px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.08)}
+  .brand-title{font-weight:800;font-size:1.15rem}
+  .brand-sub{font-size:.85rem;opacity:.92;margin-top:3px;font-weight:500}
+  .top-right{margin-left:auto;text-align:right}
+  .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 10px 30px rgba(2,6,23,0.48);transition:transform .18s,box-shadow .18s}
+  .card:hover{transform:translateY(-6px)}
+  .topo-grid{display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:stretch}
+  @media(max-width:760px){.topo-grid{grid-template-columns:1fr}}
+  .perfil{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+  .avatar{width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.06);cursor:pointer;box-shadow:0 12px 34px rgba(2,6,23,0.6);transition:transform .18s}
+  .avatar:hover{transform:translateY(-6px) scale(1.02)}
+  .user-display{font-weight:700;font-size:1rem}
+  .resumo-duplo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:540px){.resumo-duplo{grid-template-columns:1fr}}
+  .resumo-item p{margin:0;color:var(--muted);font-size:.92rem}
+  .resumo-item h2{margin:6px 0 0 0;font-size:1.8rem}
+  .positivo{color:var(--success);font-weight:700}
+  .negativo{color:var(--danger);font-weight:700}
+  .lista-simples{display:grid;gap:8px;margin-top:8px}
+  .linha-top{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;background:rgba(255,255,255,0.02)}
+  nav{display:flex;gap:10px;margin-top:6px}
+  nav button{flex:1;padding:10px;border-radius:8px;border:none;background:rgba(255,255,255,0.04);color:var(--muted);cursor:pointer;transition:all .12s}
+  nav button.active{background:var(--accent);color:white;transform:translateY(-4px);box-shadow:0 10px 24px rgba(43,140,255,0.18)}
+  .form-container{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+  input[type="text"],input[type="number"],select{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;min-width:120px}
+  .primary{background:var(--accent);color:white;padding:10px 14px;border-radius:8px;border:none;cursor:pointer}
+  .primary:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(43,140,255,0.12)}
+  .transacoes .item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.03)}
+  .btn-excluir{background:transparent;border:none;color:var(--danger);font-size:1.05rem;cursor:pointer}
+  .chart-container{max-width:460px;margin:12px auto}
+  .fade-in{animation:fadeIn .48s ease both}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  footer.note{text-align:center;color:var(--muted);font-size:.9rem;margin-top:6px}
+
+  /* ======= AUTH OVERLAY with blur ======= */
+  .overlay-auth { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:9999; }
+  .overlay-backdrop { position:absolute; inset:0; background:rgba(1,6,15,0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition:opacity .2s; }
+  .auth-box { position:relative; z-index:10000; width:92%; max-width:420px; border-radius:12px; overflow:hidden; box-shadow:0 24px 60px rgba(2,6,23,0.7); }
+  .auth-card { background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01)); padding:20px; color:inherit; }
+  .auth-card h3{margin:0 0 10px 0}
+  .auth-row{display:flex;gap:8px;margin-top:8px}
+  .remember{display:flex;align-items:center;gap:8px;margin-top:8px;color:var(--muted)}
+  .small-muted{color:var(--muted);font-size:.9rem;margin-top:8px}
+  .hide{display:none!important}
+  /* PWA install hint */
+  .pwa-hint{position:fixed;left:18px;bottom:18px;background:rgba(0,0,0,0.45);color:white;padding:8px 12px;border-radius:10px;font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="app" id="appRoot">
+
+  <!-- header -->
+  <header class="brand fade-in" role="banner">
+    <div class="logo" aria-hidden="true">
+      <!-- animated SVG logo (blue/gray) -->
+      <svg id="logoSvg" width="42" height="42" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="44" height="44" rx="8" fill="white" opacity="0.06"/>
+        <g id="chartMark" transform="translate(0,0)">
+          <path d="M12 30L20 18L28 24L36 12" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+          <circle cx="36" cy="36" r="6" fill="white" opacity="0.12"/>
+        </g>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-title">NUBOLSO</div>
+      <div class="brand-sub">Gestão simples das suas finanças</div>
+    </div>
+    <div class="top-right">
+      <div id="topUserName" class="small-muted">Olá</div>
+      <div class="small-muted">Instalável • Protegido localmente</div>
+    </div>
+  </header>
+
+  <!-- TOP: avatar + resumo -->
+  <div class="topo-grid fade-in">
+    <div class="card perfil">
+      <img id="fotoUsuario" class="avatar" alt="Avatar (clicar para alterar)" title="Clique para alterar a foto" />
+      <input id="inputFoto" type="file" accept="image/*" style="display:none" />
+      <div id="nomeContainer" class="user-display" style="margin-top:8px"></div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="card resumo-duplo">
+        <div class="resumo-item">
+          <p>Saldo Atual</p>
+          <h2 id="saldo" class="positivo">0 Kz</h2>
+        </div>
+        <div class="resumo-item">
+          <p>Despesa Geral Atual</p>
+          <h2 id="despesaGeral" class="negativo">0 Kz</h2>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4 style="margin:0 0 8px 0">Maiores gastos do mês</h4>
+        <div id="lista-top-gastos" class="lista-simples"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- nav -->
+  <nav>
+    <button onclick="mostrarAba('geral',event)" class="active">Geral</button>
+    <button onclick="mostrarAba('mensal',event)">Mensal</button>
+    <button onclick="mostrarAba('historico',event)">Histórico</button>
+    <button onclick="mostrarAba('config',event)">Configuração</button>
+  </nav>
+
+  <!-- ABA GERAL -->
+  <section id="aba-geral" class="fade-in">
+    <div class="card form-container">
+      <input id="descricao" type="text" placeholder="Descrição">
+      <input id="valor" type="number" placeholder="Valor">
+      <select id="tipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+      <select id="categoria">
+        <option value="Alimentação">Alimentação</option><option value="Transporte">Transporte</option><option value="Moradia">Moradia</option>
+        <option value="Lazer">Lazer</option><option value="Saúde">Saúde</option><option value="Educação">Educação</option>
+        <option value="Vestuário">Vestuário</option><option value="Tecnologia">Tecnologia</option><option value="Viagem">Viagem</option>
+        <option value="Serviços">Serviços</option><option value="Impostos">Impostos</option><option value="Investimentos">Investimentos</option>
+        <option value="Presentes">Presentes</option><option value="Doações">Doações</option><option value="Manutenção">Manutenção</option>
+        <option value="Pets">Pets</option><option value="Outros">Outros</option>
+      </select>
+      <button class="primary" onclick="adicionarTransacao()">Adicionar</button>
+    </div>
+
+    <div class="chart-container"><canvas id="graficoGeral"></canvas></div>
+  </section>
+
+  <!-- ABA MENSAL -->
+  <section id="aba-mensal" style="display:none" class="fade-in">
+    <div id="abas-meses" style="margin-bottom:10px"></div>
+    <div class="card"><canvas id="graficoMensal"></canvas></div>
+  </section>
+
+  <!-- ABA HISTÓRICO -->
+  <section id="aba-historico" style="display:none" class="fade-in">
+    <div class="card transacoes">
+      <h3>Histórico Completo</h3>
+      <div id="lista-transacoes"></div>
+    </div>
+  </section>
+
+  <!-- ABA CONFIG -->
+  <section id="aba-config" style="display:none" class="fade-in">
+    <div class="card">
+      <label>Limite de gastos mensal (Kz):</label>
+      <input id="limiteMensal" type="number" placeholder="Ex: 50000">
+      <button class="primary" onclick="salvarLimite()">Salvar</button>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h4>Segurança</h4>
+      <p class="small-muted">Bloquear app exige senha para abrir.</p>
+      <button class="primary" onclick="lockApp()">Bloquear Agora</button>
+      <p class="small-muted" style="margin-top:8px">Alterar nome ou senha requer desbloqueio.</p>
+      <div style="margin-top:8px">
+        <button onclick="resetAll()" style="background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px;border-radius:8px;cursor:pointer">Reiniciar dados (apaga tudo)</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="note">NUBOLSO — dados encriptados localmente com AES-GCM • PWA pronto</footer>
+</div>
+
+<!-- AUTH OVERLAY (modal) - initially hidden but shown by script -->
+<div id="authOverlay" class="overlay-auth hide" aria-hidden="true">
+  <div class="overlay-backdrop"></div>
+  <div class="auth-box">
+    <div class="auth-card">
+      <div id="authContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PWA install hint -->
+<div id="pwaHint" class="pwa-hint hide">Instalar NUBOLSO: use "Instalar" no menu do navegador</div>
+
+<script>
+/* ============================
+   Utilities: base64 / buffers
+   ============================ */
+function arrayBufferToBase64(buffer){
+  let bin=''; const bytes=new Uint8Array(buffer);
+  for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function base64ToArrayBuffer(base64){
+  const bin=atob(base64); const len=bin.length; const bytes=new Uint8Array(len);
+  for(let i=0;i<len;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+/* ============================
+   Crypto (PBKDF2 + AES-GCM)
+   ============================ */
+async function deriveKeyFromPassword(password, saltBase64){
+  const enc=new TextEncoder();
+  const passKey = await crypto.subtle.importKey('raw', enc.encode(password), {name:'PBKDF2'}, false, ['deriveKey']);
+  const salt = base64ToArrayBuffer(saltBase64);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: salt, iterations: 150000, hash: 'SHA-256' },
+    passKey,
+    { name:'AES-GCM', length: 256 },
+    false,
+    ['encrypt','decrypt']
+  );
+}
+function randomBase64(bytes=16){
+  const arr = crypto.getRandomValues(new Uint8Array(bytes));
+  return arrayBufferToBase64(arr.buffer);
+}
+async function encryptState(stateObj, key){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(JSON.stringify(stateObj));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, encoded);
+  return { iv: arrayBufferToBase64(iv.buffer), ciphertext: arrayBufferToBase64(ct) };
+}
+async function decryptStateFromBlob(blob, key){
+  const iv = base64ToArrayBuffer(blob.iv);
+  const ct = base64ToArrayBuffer(blob.ciphertext);
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv: new Uint8Array(iv)}, key, ct);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+/* ============================
+   Storage keys
+   ============================ */
+const META_KEY = 'nubolso_meta_v1';
+const ENC_KEY = 'nubolso_enc_v1';
+const SESSION_KEY = 'nubolso_session_v1'; // stores small session token (not password)
+
+/* ============================
+   App state (decrypted while unlocked)
+   ============================ */
+let sessionKey = null;
+let sessionSalt = null;
+let isUnlocked = false;
+let state = { transacoes: [], limiteMensal: 0, fotoBase64: '', nomeUsuario: '' };
+
+/* DOM refs */
+const fotoUsuarioEl = document.getElementById('fotoUsuario');
+const inputFotoEl = document.getElementById('inputFoto');
+const nomeContainer = document.getElementById('nomeContainer');
+const topUserNameEl = document.getElementById('topUserName');
+const saldoEl = document.getElementById('saldo');
+const despesaGeralEl = document.getElementById('despesaGeral');
+const listaTopGastos = document.getElementById('lista-top-gastos');
+const listaTransacoes = document.getElementById('lista-transacoes');
+const authOverlay = document.getElementById('authOverlay');
+const authContent = document.getElementById('authContent');
+const pwaHint = document.getElementById('pwaHint');
+
+let graficoGeral = null, graficoMensal = null;
+
+/* ========= PWA: manifest and service worker via blob ========= */
+async function registerServiceWorkerAndManifest(){
+  try {
+    // create manifest blob and link
+    const manifest = {
+      name: "NUBOLSO",
+      short_name: "NUBOLSO",
+      description: "Gestor financeiro pessoal — NUBOLSO",
+      start_url: ".",
+      display: "standalone",
+      background_color: "#071126",
+      theme_color: "#2b8cff",
+      icons: [
+        { src: dataUrlIcon(), sizes: "192x192", type: "image/png" },
+        { src: dataUrlIcon(), sizes: "512x512", type: "image/png" }
+      ]
+    };
+    const manBlob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+    const manURL = URL.createObjectURL(manBlob);
+    let link = document.querySelector('link[rel="manifest"]');
+    if(!link){
+      link = document.createElement('link'); link.rel='manifest'; document.head.appendChild(link);
+    }
+    link.href = manURL;
+
+    // service worker content as blob
+    const swCode = `
+      self.addEventListener('install', function(e){ self.skipWaiting(); });
+      self.addEventListener('activate', function(e){ self.clients.claim(); });
+      self.addEventListener('fetch', function(e){ /* network passthrough */ });
+    `;
+    const swBlob = new Blob([swCode], {type:'application/javascript'});
+    const swURL = URL.createObjectURL(swBlob);
+    if('serviceWorker' in navigator){
+      try{
+        await navigator.serviceWorker.register(swURL);
+        console.log('Service worker registered (blob).');
+      } catch(err){ console.warn('SW reg failed', err); }
+    }
+  } catch(err){ console.error('PWA setup error', err); }
+}
+
+// small generated PNG icon as data URL (svg->png in dataURL form not necessary, use svg data url)
+function dataUrlIcon(){
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512'><rect width='100%' height='100%' fill='#2b8cff'/><rect x='44' y='44' width='424' height='424' rx='64' fill='#0f1725'/><path d='M144 352L232 208L304 264L368 152' stroke='#a8d8ff' stroke-width='28' stroke-linecap='round' stroke-linejoin='round'/></svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+/* ========= Modal management (auth overlay) ========= */
+function showAuthOverlay(html){
+  authContent.innerHTML = html;
+  authOverlay.classList.remove('hide');
+  authOverlay.setAttribute('aria-hidden','false');
+}
+function hideAuthOverlay(){
+  authOverlay.classList.add('hide');
+  authOverlay.setAttribute('aria-hidden','true');
+}
+
+/* ========= meta check / flow ========= */
+function metaExists(){
+  return !!localStorage.getItem(META_KEY) && !!localStorage.getItem(ENC_KEY);
+}
+
+/* ========= Setup: create account (name + password) ========= */
+async function initialSetup(name, password, rememberSession=false){
+  const salt = randomBase64(16);
+  sessionSalt = salt;
+  sessionKey = await deriveKeyFromPassword(password, salt);
+  isUnlocked = true;
+  state = { transacoes: [], limiteMensal: 0, fotoBase64: '', nomeUsuario: name || '' };
+  const blob = await encryptState(state, sessionKey);
+  localStorage.setItem(META_KEY, JSON.stringify({ salt, version:1 }));
+  localStorage.setItem(ENC_KEY, JSON.stringify(blob));
+  if(rememberSession){
+    // store ephemeral token (not the password). We store salt + expiry encrypted with derived key? For demo store simple token with expiry (short)
+    const tokenObj = { ttl: Date.now() + (1000*60*60*24*7) }; // 7 days
+    localStorage.setItem(SESSION_KEY, JSON.stringify(tokenObj));
+  }
+  renderUnlockedUI();
+  hideAuthOverlay();
+}
+
+/* ========= Unlock existing data ========= */
+async function unlockWithPassword(password, rememberSession=false){
+  const meta = JSON.parse(localStorage.getItem(META_KEY));
+  if(!meta || !meta.salt){ showSetupModal(); return; }
+  try{
+    const key = await deriveKeyFromPassword(password, meta.salt);
+    const blob = JSON.parse(localStorage.getItem(ENC_KEY));
+    const dec = await decryptStateFromBlob(blob, key);
+    sessionKey = key; sessionSalt = meta.salt; state = dec; isUnlocked = true;
+    if(rememberSession){
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ ttl: Date.now() + (1000*60*60*24*7) }));
+    }
+    renderUnlockedUI();
+    hideAuthOverlay();
+  } catch(e){
+    console.error(e);
+    alert('Senha inválida. Tente novamente.');
+  }
+}
+
+/* ========= persist encrypted state ========= */
+async function persistState(){
+  if(!sessionKey){ console.warn('Sem sessão chave'); return; }
+  try{
+    const blob = await encryptState(state, sessionKey);
+    localStorage.setItem(ENC_KEY, JSON.stringify(blob));
+  } catch(e){ console.error('Erro ao persistir', e); }
+}
+
+/* ========= UI: show Setup / Unlock modals ========= */
+function showSetupModal(){
+  const html = `
+    <div style="padding:6px 0 0 0">
+      <h3>Bem-vindo ao NUBOLSO</h3>
+      <p class="small-muted">Configura o teu nome e uma senha mestra. Guarda a senha — sem ela não é possível recuperar os dados.</p>
+      <div style="margin-top:10px">
+        <input id="suName" type="text" placeholder="Nome (ex: João)" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit" />
+        <input id="suPass" type="password" placeholder="Senha mestra" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;margin-top:8px" />
+        <input id="suPass2" type="password" placeholder="Repete a senha" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;margin-top:8px" />
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+          <button class="primary" onclick="handleInitialSetup()">Criar conta</button>
+        </div>
+      </div>
+    </div>`;
+  showAuthOverlay(html);
+  document.getElementById('suName').focus();
+}
+async function handleInitialSetup(){
+  const name = document.getElementById('suName').value.trim();
+  const p1 = document.getElementById('suPass').value;
+  const p2 = document.getElementById('suPass2').value;
+  if(!name || !p1){ alert('Nome e senha são obrigatórios.'); return; }
+  if(p1 !== p2){ alert('As senhas não coincidem.'); return; }
+  await initialSetup(name, p1, true);
+}
+
+function showUnlockModal(){
+  const html = `
+    <div>
+      <h3>Desbloquear NUBOLSO</h3>
+      <p class="small-muted">Insere a tua senha mestra para abrir a aplicação.</p>
+      <div style="margin-top:10px">
+        <input id="unlockPass" type="password" placeholder="Senha mestra" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit" />
+        <div class="remember"><label><input id="rememberMe" type="checkbox"/> Lembrar sessão por 7 dias</label></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="primary" onclick="handleUnlock()">Desbloquear</button>
+        </div>
+      </div>
+    </div>`;
+  showAuthOverlay(html);
+  document.getElementById('unlockPass').focus();
+}
+function handleUnlock(){
+  const pw = document.getElementById('unlockPass').value;
+  const remember = document.getElementById('rememberMe') && document.getElementById('rememberMe').checked;
+  unlockWithPassword(pw, remember);
+}
+
+/* ========= Lock / Reset ========= */
+function lockApp(){
+  sessionKey = null; isUnlocked = false;
+  // show unlock modal with blur overlay
+  showUnlockModal();
+}
+function resetAll(){
+  if(!confirm('Isto irá apagar todos os dados localmente. Confirmar?')) return;
+  localStorage.removeItem(META_KEY); localStorage.removeItem(ENC_KEY); localStorage.removeItem(SESSION_KEY);
+  sessionKey=null; isUnlocked=false; state={transacoes:[], limiteMensal:0, fotoBase64:'', nomeUsuario:''};
+  showSetupModal();
+}
+
+/* ========= photo handling (avatar clickable) ========= */
+fotoUsuarioEl.addEventListener('click', ()=> inputFotoEl.click());
+inputFotoEl.addEventListener('change', (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = async ()=> {
+    state.fotoBase64 = r.result;
+    await persistState();
+    carregarFoto();
+  };
+  r.readAsDataURL(f);
+});
+function carregarFoto(){
+  if(state && state.fotoBase64) fotoUsuarioEl.src = state.fotoBase64;
+  else fotoUsuarioEl.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='#cfe8ff'/><circle cx='60' cy='42' r='26' fill='#a8d8ff'/></svg>`);
+}
+
+/* ========= name display and first-time edit (removed after set) ========= */
+function updateNameDisplay(){
+  const name = state && state.nomeUsuario ? state.nomeUsuario : '';
+  topUserNameEl.textContent = name ? `Olá, ${name}` : 'Olá';
+  const nomeHtml = name ? `<div style="font-weight:700">${name}</div>` : `<div style="color:var(--muted)">Nome não definido</div>`;
+  nomeContainer.innerHTML = nomeHtml;
+}
+
+/* ========= core: add / remove transações ========= */
+async function adicionarTransacao(){
+  if(!isUnlocked){ alert('Aplicação bloqueada. Desbloqueia para usar.'); showUnlockModal(); return; }
+  const descricao = document.getElementById('descricao').value.trim();
+  const valor = parseFloat(document.getElementById('valor').value);
+  const tipo = document.getElementById('tipo').value;
+  const categoria = document.getElementById('categoria').value;
+  if(!descricao || isNaN(valor) || valor<=0){ alert('Preencha corretamente a descrição e o valor'); return; }
+  const data = new Date();
+  const mesAno = new Date().toLocaleString('pt-PT', {month:'long', year:'numeric'});
+  state.transacoes.push({ descricao, valor, tipo, categoria, data: data.toLocaleDateString('pt-PT'), mesAno });
+  await persistState();
+  document.getElementById('descricao').value=''; document.getElementById('valor').value='';
+  if(state.limiteMensal && tipo==='despesa'){
+    const gastoMes = state.transacoes.filter(t=>t.tipo==='despesa' && t.mesAno===mesAno).reduce((a,t)=>a+(Number(t.valor)||0),0);
+    if(gastoMes > state.limiteMensal) alert('⚠ Limite mensal de ' + state.limiteMensal.toLocaleString('pt-PT') + ' Kz ultrapassado!');
+  }
+  atualizarUI();
+}
+async function removerTransacao(index){
+  if(!isUnlocked){ alert('Bloqueia a app antes de remover.'); showUnlockModal(); return; }
+  if(index>=0 && index < state.transacoes.length){ state.transacoes.splice(index,1); await persistState(); atualizarUI(); }
+}
+
+/* ========= render transacoes / top gastos / saldos ========= */
+function renderTransacoes(){
+  listaTransacoes.innerHTML = '';
+  state.transacoes.slice().reverse().forEach((t, idxRev)=>{
+    const idx = state.transacoes.length - 1 - idxRev;
+    const div = document.createElement('div'); div.className='item';
+    const valorFmt = (Number(t.valor)||0).toLocaleString('pt-PT') + ' Kz';
+    const classe = t.tipo==='receita' ? 'positivo' : 'negativo';
+    div.innerHTML = `<div><strong>${t.descricao}</strong> (${t.categoria})<br><span style="color:var(--muted)">${t.data}</span></div>
+      <div><span class="${classe}">${t.tipo==='receita'?'+':'-'}${valorFmt}</span>
+      <button class="btn-excluir" onclick="removerTransacao(${idx})">✖</button></div>`;
+    listaTransacoes.appendChild(div);
+  });
+}
+function atualizarSaldos(){
+  const totalReceitas = state.transacoes.filter(t=>t.tipo==='receita').reduce((a,t)=>a+(Number(t.valor)||0),0);
+  const totalDespesas = state.transacoes.filter(t=>t.tipo==='despesa').reduce((a,t)=>a+(Number(t.valor)||0),0);
+  const saldo = totalReceitas - totalDespesas;
+  saldoEl.textContent = saldo.toLocaleString('pt-PT') + ' Kz';
+  saldoEl.className = saldo>=0 ? 'positivo' : 'negativo';
+  despesaGeralEl.textContent = totalDespesas.toLocaleString('pt-PT') + ' Kz';
+  despesaGeralEl.className = 'negativo';
+}
+function atualizarTopGastosMes(){
+  const mes = new Date().toLocaleString('pt-PT', {month:'long', year:'numeric'});
+  const mapa = {};
+  state.transacoes.filter(t=>t.tipo==='despesa' && t.mesAno===mes).forEach(t=> mapa[t.categoria] = (mapa[t.categoria]||0) + (Number(t.valor)||0));
+  const pares = Object.entries(mapa).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  listaTopGastos.innerHTML = '';
+  if(pares.length===0){ listaTopGastos.innerHTML = `<div class="linha-top"><span>Sem dados ainda para este mês.</span></div>`; return; }
+  pares.forEach(([cat,val])=>{
+    const el = document.createElement('div'); el.className='linha-top';
+    el.innerHTML = `<strong>${cat}</strong><span>${val.toLocaleString('pt-PT')} Kz</span>`;
+    listaTopGastos.appendChild(el);
+  });
+}
+
+/* ========= charts ========= */
+function atualizarGraficos(){
+  const receitas = state.transacoes.filter(t=>t.tipo==='receita').reduce((a,t)=>a+(Number(t.valor)||0),0);
+  const despesas = state.transacoes.filter(t=>t.tipo==='despesa').reduce((a,t)=>a+(Number(t.valor)||0),0);
+  if(graficoGeral) graficoGeral.destroy();
+  graficoGeral = new Chart(document.getElementById('graficoGeral'), {
+    type:'doughnut',
+    data:{ labels:['Receitas','Despesas'], datasets:[{ data:[receitas,despesas], backgroundColor:['#4CAF50','#E53935'] }]},
+    options:{ responsive:true, animation:{animateRotate:true,animateScale:true}, plugins:{legend:{position:'bottom'}} }
+  });
+  const meses = [...new Set(state.transacoes.map(t=>t.mesAno))];
+  const container = document.getElementById('abas-meses'); container.innerHTML='';
+  meses.forEach(m=>{
+    const btn = document.createElement('button'); btn.textContent=m; btn.onclick=()=>atualizarGraficoMensal(m); container.appendChild(btn);
+  });
+}
+function atualizarGraficoMensal(mes){
+  const categorias={};
+  state.transacoes.filter(t=>t.mesAno===mes && t.tipo==='despesa').forEach(t=> categorias[t.categoria]=(categorias[t.categoria]||0)+(Number(t.valor)||0));
+  if(graficoMensal) graficoMensal.destroy();
+  graficoMensal = new Chart(document.getElementById('graficoMensal'), {
+    type:'pie',
+    data:{ labels:Object.keys(categorias), datasets:[{ data:Object.values(categorias), backgroundColor:['#FF9800','#2196F3','#9C27B0','#FFC107','#4CAF50','#E91E63','#00BCD4','#8BC34A','#795548'] }]},
+    options:{ responsive:true, animation:{animateRotate:true,animateScale:true} }
+  });
+}
+
+/* ========= save limit ========= */
+async function salvarLimite(){
+  if(!isUnlocked){ alert('Desbloqueia para alterar.'); showUnlockModal(); return; }
+  state.limiteMensal = parseFloat(document.getElementById('limiteMensal').value) || 0;
+  await persistState(); alert('Limite salvo!');
+}
+
+/* ========= UI: show/hide panes ========= */
+function mostrarAba(aba, evt){
+  ['geral','mensal','historico','config'].forEach(id=>document.getElementById(`aba-${id}`).style.display='none');
+  document.getElementById(`aba-${aba}`).style.display = 'block';
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  if(evt && evt.target) evt.target.classList.add('active');
+}
+
+/* ========= render unlocked UI ========= */
+function renderUnlockedUI(){
+  carregarFoto(); updateNameDisplay(); document.getElementById('limiteMensal').value = state.limiteMensal || '';
+  atualizarUI();
+}
+
+/* ========= composite UI refresh ========= */
+function atualizarUI(){
+  renderTransacoes(); atualizarSaldos(); atualizarTopGastosMes(); atualizarGraficos();
+}
+
+/* ========= boot sequence ========= */
+async function boot(){
+  await registerServiceWorkerAndManifest();
+  // check session token validity
+  const s = localStorage.getItem(SESSION_KEY);
+  if(!metaExists()){
+    // first run: setup
+    showSetupModal();
+    return;
+  } else if(s){
+    try{
+      const token = JSON.parse(s);
+      if(token && token.ttl && Date.now() < token.ttl){
+        // attempt automatic unlock: we still need the key derived from password - cannot derive without password.
+        // For convenience, we will treat token as temporary skip: but to be secure we require password. So ignore token.
+        // For demo, show unlock modal but precheck remember box.
+      }
+    } catch(e){}
+    // show unlock modal
+    showUnlockModal();
+  } else {
+    showUnlockModal();
+  }
+}
+boot();
+
+/* ========= helpers & bindings ========= */
+function updateNameDisplay(){ const name = state && state.nomeUsuario ? state.nomeUsuario : ''; topUserNameEl.textContent = name ? `Olá, ${name}` : 'Olá'; nomeContainer.innerHTML = name ? `<div style="font-weight:700">${name}</div>` : `<div class="small-muted">Nome não definido</div>`; }
+
+/* Expose some functions used by onclick attributes */
+window.adicionarTransacao = adicionarTransacao;
+window.removerTransacao = removerTransacao;
+window.salvarLimite = salvarLimite;
+window.lockApp = lockApp;
+window.resetAll = resetAll;
+window.mostrarAba = mostrarAba;
+window.showUnlockModal = showUnlockModal;
+window.carregarFoto = carregarFoto;
+window.initialSetup = initialSetup;
+window.unlockWithPassword = unlockWithPassword;
+
+</script>
+</body>
+</html>
