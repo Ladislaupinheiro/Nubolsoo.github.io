@@ -1,41 +1,37 @@
-const CACHE_NAME = 'nubolso-v1';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  // adicione aqui outros recursos essenciais (css, js, fontes) se os tiver em arquivos separados
+const CACHE_NAME = "nubolso-cache-v1";
+const urlsToCache = [
+  "./",
+  "./index.html",
+  "./manifest.json",
+  "./styles.css", 
+  "./app.js"
 ];
 
-self.addEventListener('install', (event) => {
+// Instala o SW e adiciona ao cache
+self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(urlsToCache);
+    })
   );
-  self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+// Ativa o SW e limpa caches antigos
+self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.map(k => k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())
-    ))
+    caches.keys().then(keys => {
+      return Promise.all(
+        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+      );
+    })
   );
-  self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  // Strategy: try cache first, then network
+// Responde com cache primeiro
+self.addEventListener("fetch", event => {
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // optionally cache new resources
-        return response;
-      }).catch(() => {
-        // fallback could be a cached offline page if you add one
-        return caches.match('/index.html');
-      });
+    caches.match(event.request).then(response => {
+      return response || fetch(event.request);
     })
   );
 });
