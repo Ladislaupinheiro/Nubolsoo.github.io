@@ -2,7 +2,7 @@
   "name": "NUBOLSO",
   "short_name": "NUBOLSO",
   "start_url": ".",
-  "display": "standalone",
+  "display": "https://github.com/Ladislaupinheiro/Nubolsoo.github.io",
   "background_color": "#0A192F",
   "theme_color": "#0A192F",
   "orientation": "portrait",
