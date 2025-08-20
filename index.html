@@ -5,10 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>NUBOLSO — Gestor Financeiro</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0A192F">
-
-<link rel="icon" href="/icons/icon-192.png">
+<meta name="theme-color" content="#2b8cff">
 
 <style>
   :root{
@@ -67,7 +64,10 @@
   .small-muted{color:var(--muted);font-size:.9rem;margin-top:8px}
   .hide{display:none!important}
   /* PWA install hint */
-  .pwa-hint{position:fixed;left:18px;bottom:18px;background:rgba(0,0,0,0.45);color:white;padding:8px 12px;border-radius:10px;font-size:.9rem}
+  .pwa-hint{position:fixed;left:18px;bottom:18px;background:rgba(43,140,255,0.9);color:white;padding:10px 14px;border-radius:10px;font-size:.9rem;cursor:pointer;box-shadow:0 8px 24px rgba(43,140,255,0.3);animation:slideIn 0.5s ease}
+  @keyframes slideIn{from{transform:translateX(-100%);opacity:0}to{transform:translateX(0);opacity:1}}
+  .install-button{background:var(--success);color:white;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:0.9rem}
+  .install-button:hover{background:#45a049}
 </style>
 </head>
 <body>
@@ -197,7 +197,10 @@
 </div>
 
 <!-- PWA install hint -->
-<div id="pwaHint" class="pwa-hint hide">Instalar NUBOLSO: use "Instalar" no menu do navegador</div>
+<div id="pwaHint" class="pwa-hint hide">
+  <span>📱 Instalar NUBOLSO no seu dispositivo</span>
+  <button id="installBtn" class="install-button" style="margin-left: 10px;">Instalar</button>
+</div>
 
 <script>
 /* ============================
@@ -251,7 +254,7 @@ async function decryptStateFromBlob(blob, key){
    ============================ */
 const META_KEY = 'nubolso_meta_v1';
 const ENC_KEY = 'nubolso_enc_v1';
-const SESSION_KEY = 'nubolso_session_v1'; // stores small session token (not password)
+const SESSION_KEY = 'nubolso_session_v1';
 
 /* ============================
    App state (decrypted while unlocked)
@@ -276,53 +279,175 @@ const pwaHint = document.getElementById('pwaHint');
 
 let graficoGeral = null, graficoMensal = null;
 
-/* ========= PWA: manifest and service worker via blob ========= */
-async function registerServiceWorkerAndManifest(){
-  try {
-    // create manifest blob and link
-    const manifest = {
-      name: "NUBOLSO",
-      short_name: "NUBOLSO",
-      description: "Gestor financeiro pessoal — NUBOLSO",
-      start_url: ".",
-      display: "standalone",
-      background_color: "#071126",
-      theme_color: "#2b8cff",
-      icons: [
-        { src: dataUrlIcon(), sizes: "192x192", type: "image/png" },
-        { src: dataUrlIcon(), sizes: "512x512", type: "image/png" }
-      ]
-    };
-    const manBlob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
-    const manURL = URL.createObjectURL(manBlob);
-    let link = document.querySelector('link[rel="manifest"]');
-    if(!link){
-      link = document.createElement('link'); link.rel='manifest'; document.head.appendChild(link);
-    }
-    link.href = manURL;
+/* ========= PWA: Dynamic manifest and service worker ========= */
+let deferredPrompt = null;
 
-    // service worker content as blob
-    const swCode = `
-      self.addEventListener('install', function(e){ self.skipWaiting(); });
-      self.addEventListener('activate', function(e){ self.clients.claim(); });
-      self.addEventListener('fetch', function(e){ /* network passthrough */ });
-    `;
-    const swBlob = new Blob([swCode], {type:'application/javascript'});
-    const swURL = URL.createObjectURL(swBlob);
-    if('serviceWorker' in navigator){
-      try{
-        await navigator.serviceWorker.register(swURL);
-        console.log('Service worker registered (blob).');
-      } catch(err){ console.warn('SW reg failed', err); }
-    }
-  } catch(err){ console.error('PWA setup error', err); }
+function createManifest() {
+  const manifest = {
+    name: "NUBOLSO - Gestor Financeiro",
+    short_name: "NUBOLSO",
+    description: "Gestor financeiro pessoal seguro e offline",
+    start_url: "./",
+    display: "standalone",
+    background_color: "#071126",
+    theme_color: "#2b8cff",
+    orientation: "portrait-primary",
+    scope: "./",
+    icons: [
+      {
+        src: generatePWAIcon(192),
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any maskable"
+      },
+      {
+        src: generatePWAIcon(512),
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable"
+      }
+    ]
+  };
+  
+  const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+  const manifestURL = URL.createObjectURL(manifestBlob);
+  
+  // Remove existing manifest link if any
+  const existingManifest = document.querySelector('link[rel="manifest"]');
+  if (existingManifest) {
+    existingManifest.remove();
+  }
+  
+  // Add new manifest
+  const link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = manifestURL;
+  document.head.appendChild(link);
 }
 
-// small generated PNG icon as data URL (svg->png in dataURL form not necessary, use svg data url)
-function dataUrlIcon(){
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512'><rect width='100%' height='100%' fill='#2b8cff'/><rect x='44' y='44' width='424' height='424' rx='64' fill='#0f1725'/><path d='M144 352L232 208L304 264L368 152' stroke='#a8d8ff' stroke-width='28' stroke-linecap='round' stroke-linejoin='round'/></svg>`;
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+function generatePWAIcon(size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  
+  // Background gradient
+  const gradient = ctx.createLinearGradient(0, 0, size, size);
+  gradient.addColorStop(0, '#2b8cff');
+  gradient.addColorStop(1, '#1976d2');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  
+  // Chart icon
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = size * 0.04;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  
+  ctx.beginPath();
+  ctx.moveTo(size * 0.2, size * 0.7);
+  ctx.lineTo(size * 0.4, size * 0.4);
+  ctx.lineTo(size * 0.6, size * 0.5);
+  ctx.lineTo(size * 0.8, size * 0.3);
+  ctx.stroke();
+  
+  // Circle
+  ctx.beginPath();
+  ctx.arc(size * 0.8, size * 0.8, size * 0.08, 0, 2 * Math.PI);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fill();
+  
+  return canvas.toDataURL('image/png');
 }
+
+async function createServiceWorker() {
+  const swCode = `
+const CACHE_NAME = 'nubolso-v1';
+const urlsToCache = [];
+
+self.addEventListener('install', function(event) {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(function(cache) {
+        return cache.addAll(urlsToCache);
+      })
+  );
+});
+
+self.addEventListener('activate', function(event) {
+  self.clients.claim();
+  event.waitUntil(
+    caches.keys().then(function(cacheNames) {
+      return Promise.all(
+        cacheNames.map(function(cacheName) {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+
+self.addEventListener('fetch', function(event) {
+  // For now, just pass through to network
+  event.respondWith(fetch(event.request));
+});
+
+// Handle background sync for offline functionality
+self.addEventListener('sync', function(event) {
+  if (event.tag === 'background-sync') {
+    // Handle background sync
+  }
+});
+`;
+
+  const swBlob = new Blob([swCode], { type: 'application/javascript' });
+  const swURL = URL.createObjectURL(swBlob);
+  
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.register(swURL, { scope: './' });
+      console.log('Service Worker registrado com sucesso:', registration);
+      return registration;
+    } catch (error) {
+      console.error('Erro ao registrar Service Worker:', error);
+    }
+  }
+}
+
+// PWA install prompt handling
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallPrompt();
+});
+
+function showInstallPrompt() {
+  pwaHint.classList.remove('hide');
+  
+  document.getElementById('installBtn').addEventListener('click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User response to install prompt: ${outcome}`);
+      deferredPrompt = null;
+      pwaHint.classList.add('hide');
+    }
+  });
+  
+  // Auto hide after 10 seconds
+  setTimeout(() => {
+    pwaHint.classList.add('hide');
+  }, 10000);
+}
+
+window.addEventListener('appinstalled', () => {
+  console.log('NUBOLSO foi instalado');
+  pwaHint.classList.add('hide');
+  deferredPrompt = null;
+});
 
 /* ========= Modal management (auth overlay) ========= */
 function showAuthOverlay(html){
@@ -351,8 +476,7 @@ async function initialSetup(name, password, rememberSession=false){
   localStorage.setItem(META_KEY, JSON.stringify({ salt, version:1 }));
   localStorage.setItem(ENC_KEY, JSON.stringify(blob));
   if(rememberSession){
-    // store ephemeral token (not the password). We store salt + expiry encrypted with derived key? For demo store simple token with expiry (short)
-    const tokenObj = { ttl: Date.now() + (1000*60*60*24*7) }; // 7 days
+    const tokenObj = { ttl: Date.now() + (1000*60*60*24*7) };
     localStorage.setItem(SESSION_KEY, JSON.stringify(tokenObj));
   }
   renderUnlockedUI();
@@ -393,36 +517,11 @@ function showSetupModal(){
   const html = `
     <div style="padding:6px 0 0 0">
       <h3>Bem-vindo ao NUBOLSO</h3>
-      <p class="small-muted">Configura o teu nome e uma senha mestra. Guarda a senha — sem ela não é possível recuperar os dados.</p>
+      <p class="small-muted">Configure o seu nome e uma senha mestra. Guarde a senha — sem ela não é possível recuperar os dados.</p>
       <div style="margin-top:10px">
         <input id="suName" type="text" placeholder="Nome (ex: João)" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit" />
         <input id="suPass" type="password" placeholder="Senha mestra" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;margin-top:8px" />
-        <input id="suPass2" type="password" placeholder="Repete a senha" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;margin-top:8px" />
-        <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
-          <button class="primary" onclick="handleInitialSetup()">Criar conta</button>
-        </div>
-      </div>
-    </div>`;
-  showAuthOverlay(html);
-  document.getElementById('suName').focus();
-}
-async function handleInitialSetup(){
-  const name = document.getElementById('suName').value.trim();
-  const p1 = document.getElementById('suPass').value;
-  const p2 = document.getElementById('suPass2').value;
-  if(!name || !p1){ alert('Nome e senha são obrigatórios.'); return; }
-  if(p1 !== p2){ alert('As senhas não coincidem.'); return; }
-  await initialSetup(name, p1, true);
-}
-
-function showUnlockModal(){
-  const html = `
-    <div>
-      <h3>Desbloquear NUBOLSO</h3>
-      <p class="small-muted">Insere a tua senha mestra para abrir a aplicação.</p>
-      <div style="margin-top:10px">
-        <input id="unlockPass" type="password" placeholder="Senha mestra" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit" />
-        <div class="remember"><label><input id="rememberMe" type="checkbox"/> Lembrar sessão por 7 dias</label></div>
+        <input id="suPass2" type="password" placeholder="Repita a senha" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;margin-top:8px" />
         <div style="display:flex;gap:8px;margin-top:12px">
           <button class="primary" onclick="handleUnlock()">Desbloquear</button>
         </div>
@@ -440,7 +539,6 @@ function handleUnlock(){
 /* ========= Lock / Reset ========= */
 function lockApp(){
   sessionKey = null; isUnlocked = false;
-  // show unlock modal with blur overlay
   showUnlockModal();
 }
 function resetAll(){
@@ -468,7 +566,7 @@ function carregarFoto(){
   else fotoUsuarioEl.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='#cfe8ff'/><circle cx='60' cy='42' r='26' fill='#a8d8ff'/></svg>`);
 }
 
-/* ========= name display and first-time edit (removed after set) ========= */
+/* ========= name display and first-time edit ========= */
 function updateNameDisplay(){
   const name = state && state.nomeUsuario ? state.nomeUsuario : '';
   topUserNameEl.textContent = name ? `Olá, ${name}` : 'Olá';
@@ -496,7 +594,7 @@ async function adicionarTransacao(){
   atualizarUI();
 }
 async function removerTransacao(index){
-  if(!isUnlocked){ alert('Bloqueia a app antes de remover.'); showUnlockModal(); return; }
+  if(!isUnlocked){ alert('Desbloqueia a app antes de remover.'); showUnlockModal(); return; }
   if(index>=0 && index < state.transacoes.length){ state.transacoes.splice(index,1); await persistState(); atualizarUI(); }
 }
 
@@ -550,7 +648,9 @@ function atualizarGraficos(){
   const meses = [...new Set(state.transacoes.map(t=>t.mesAno))];
   const container = document.getElementById('abas-meses'); container.innerHTML='';
   meses.forEach(m=>{
-    const btn = document.createElement('button'); btn.textContent=m; btn.onclick=()=>atualizarGraficoMensal(m); container.appendChild(btn);
+    const btn = document.createElement('button'); btn.textContent=m; btn.onclick=()=>atualizarGraficoMensal(m); 
+    btn.style.cssText = 'padding:8px 12px;margin:4px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:inherit;cursor:pointer';
+    container.appendChild(btn);
   });
 }
 function atualizarGraficoMensal(mes){
@@ -592,8 +692,24 @@ function atualizarUI(){
 
 /* ========= boot sequence ========= */
 async function boot(){
-  await registerServiceWorkerAndManifest();
-  // check session token validity
+  // Initialize PWA features
+  createManifest();
+  await createServiceWorker();
+  
+  // Check for install prompt after a delay
+  setTimeout(() => {
+    if (!deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+      // Show install hint even if prompt wasn't triggered
+      const hint = document.getElementById('pwaHint');
+      if (hint) {
+        hint.innerHTML = `<span>💡 Para melhor experiência, adicione à tela inicial</span>`;
+        hint.classList.remove('hide');
+        setTimeout(() => hint.classList.add('hide'), 8000);
+      }
+    }
+  }, 3000);
+  
+  // Check session token validity
   const s = localStorage.getItem(SESSION_KEY);
   if(!metaExists()){
     // first run: setup
@@ -603,23 +719,34 @@ async function boot(){
     try{
       const token = JSON.parse(s);
       if(token && token.ttl && Date.now() < token.ttl){
-        // attempt automatic unlock: we still need the key derived from password - cannot derive without password.
-        // For convenience, we will treat token as temporary skip: but to be secure we require password. So ignore token.
-        // For demo, show unlock modal but precheck remember box.
+        // For security, we still require password even with valid session
+        showUnlockModal();
+        // But we could auto-check the remember checkbox
+        setTimeout(() => {
+          const rememberBox = document.getElementById('rememberMe');
+          if (rememberBox) rememberBox.checked = true;
+        }, 100);
+      } else {
+        localStorage.removeItem(SESSION_KEY);
+        showUnlockModal();
       }
-    } catch(e){}
-    // show unlock modal
-    showUnlockModal();
+    } catch(e){
+      localStorage.removeItem(SESSION_KEY);
+      showUnlockModal();
+    }
   } else {
     showUnlockModal();
   }
 }
-boot();
 
-/* ========= helpers & bindings ========= */
-function updateNameDisplay(){ const name = state && state.nomeUsuario ? state.nomeUsuario : ''; topUserNameEl.textContent = name ? `Olá, ${name}` : 'Olá'; nomeContainer.innerHTML = name ? `<div style="font-weight:700">${name}</div>` : `<div class="small-muted">Nome não definido</div>`; }
+// Initialize app when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
 
-/* Expose some functions used by onclick attributes */
+/* ========= Global function exposure ========= */
 window.adicionarTransacao = adicionarTransacao;
 window.removerTransacao = removerTransacao;
 window.salvarLimite = salvarLimite;
@@ -627,23 +754,60 @@ window.lockApp = lockApp;
 window.resetAll = resetAll;
 window.mostrarAba = mostrarAba;
 window.showUnlockModal = showUnlockModal;
-window.carregarFoto = carregarFoto;
-window.initialSetup = initialSetup;
-window.unlockWithPassword = unlockWithPassword;
+window.handleInitialSetup = handleInitialSetup;
+window.handleUnlock = handleUnlock;
+
+/* ========= Keyboard shortcuts ========= */
+document.addEventListener('keydown', (e) => {
+  // Enter key in auth modals
+  if (!authOverlay.classList.contains('hide')) {
+    if (e.key === 'Enter') {
+      const unlockBtn = document.querySelector('#authContent button.primary');
+      if (unlockBtn) unlockBtn.click();
+    }
+  }
+  
+  // Enter key in main form
+  if (e.key === 'Enter' && (e.target.id === 'descricao' || e.target.id === 'valor')) {
+    adicionarTransacao();
+  }
+});
+
+/* ========= Offline detection ========= */
+window.addEventListener('online', () => {
+  console.log('App está online');
+});
+
+window.addEventListener('offline', () => {
+  console.log('App está offline - funcionando localmente');
+});
 
 </script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-navigator.serviceWorker.register('/service-worker.js');
-      .then(reg => console.log("Service Worker registrado:", reg))
-      .catch(err => console.error("Erro no SW:", err));
-  });
-}
-</script>
-
-
 </body>
-</html>
+</html>flex;gap:8px;margin-top:12px;align-items:center">
+          <button class="primary" onclick="handleInitialSetup()">Criar conta</button>
+        </div>
+      </div>
+    </div>`;
+  showAuthOverlay(html);
+  document.getElementById('suName').focus();
+}
 
+async function handleInitialSetup(){
+  const name = document.getElementById('suName').value.trim();
+  const p1 = document.getElementById('suPass').value;
+  const p2 = document.getElementById('suPass2').value;
+  if(!name || !p1){ alert('Nome e senha são obrigatórios.'); return; }
+  if(p1 !== p2){ alert('As senhas não coincidem.'); return; }
+  await initialSetup(name, p1, true);
+}
+
+function showUnlockModal(){
+  const html = `
+    <div>
+      <h3>Desbloquear NUBOLSO</h3>
+      <p class="small-muted">Insira a sua senha mestra para abrir a aplicação.</p>
+      <div style="margin-top:10px">
+        <input id="unlockPass" type="password" placeholder="Senha mestra" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit" />
+        <div class="remember"><label><input id="rememberMe" type="checkbox"/> Lembrar sessão por 7 dias</label></div>
+        <div style="display:
